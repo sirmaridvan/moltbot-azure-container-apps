@@ -9,17 +9,12 @@ param environmentName string
 @description('Primary location for all resources')
 param location string
 
-@description('Anthropic API key for Claude models (optional if using OpenRouter)')
-@secure()
-param anthropicApiKey string = ''
-
-@description('OpenRouter API key (alternative to Anthropic)')
-@secure()
-param openRouterApiKey string = ''
-
-@description('OpenAI API key for fallback models (optional)')
+@description('OpenAI API key (Azure AI Foundry)')
 @secure()
 param openaiApiKey string = ''
+
+@description('OpenAI-compatible base URL (use Azure AI Foundry endpoint when applicable)')
+param openaiBaseUrl string = ''
 
 @description('Telegram Bot Token for messaging (optional)')
 @secure()
@@ -28,13 +23,6 @@ param telegramBotToken string = ''
 @description('Telegram User ID for allowlist (optional)')
 param telegramAllowedUserId string = ''
 
-@description('Discord Bot Token for messaging (optional)')
-@secure()
-param discordBotToken string = ''
-
-@description('Discord User IDs allowed to DM the bot (comma-separated, e.g., "123456789,987654321")')
-param discordAllowedUsers string = ''
-
 @description('ClawdBot Gateway Token for web UI authentication (will be auto-generated if not provided)')
 @secure()
 param clawdbotGatewayToken string = ''
@@ -42,8 +30,8 @@ param clawdbotGatewayToken string = ''
 @description('ClawdBot persona name (default: Clawd)')
 param clawdbotPersonaName string = 'Clawd'
 
-@description('The model to use - must use exact OpenRouter model ID (e.g., openrouter/anthropic/claude-3.5-sonnet)')
-param clawdbotModel string = 'openrouter/anthropic/claude-3.5-sonnet'
+@description('The model to use (e.g., openai/gpt-5-mini for Azure AI Foundry)')
+param clawdbotModel string = 'openai/gpt-5-mini'
 
 @description('Container image tag (default: latest for ACR-built image)')
 param imageTag string = 'latest'
@@ -142,18 +130,16 @@ module clawdbotApp './modules/clawdbot-app.bicep' = {
     location: location
     tags: tags
     containerAppsEnvironmentId: containerAppsEnvironment.outputs.id
+    containerAppsEnvironmentDefaultDomain: containerAppsEnvironment.outputs.defaultDomain
     containerRegistryName: containerRegistry.outputs.name
     containerRegistryLoginServer: containerRegistry.outputs.loginServer
     storageAccountName: storageAccount.outputs.name
     imageTag: imageTag
     useOfficialImage: useOfficialImage
-    anthropicApiKey: anthropicApiKey
-    openRouterApiKey: openRouterApiKey
     openaiApiKey: openaiApiKey
+    openaiBaseUrl: openaiBaseUrl
     telegramBotToken: telegramBotToken
     telegramAllowedUserId: telegramAllowedUserId
-    discordBotToken: discordBotToken
-    discordAllowedUsers: discordAllowedUsers
     clawdbotGatewayToken: clawdbotGatewayToken
     clawdbotPersonaName: clawdbotPersonaName
     clawdbotModel: clawdbotModel
