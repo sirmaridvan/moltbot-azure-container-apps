@@ -55,7 +55,7 @@ resource errorRateAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-previ
     criteria: {
       allOf: [
         {
-          query: 'ContainerAppConsoleLogs_CL | where ContainerAppName_s == "${containerAppName}" | where Log_s contains "error" or Log_s contains "Error" or Log_s contains "ERROR" | where Log_s contains "401" or Log_s contains "403" or Log_s contains "authentication" or Log_s contains "unauthorized" | summarize ErrorCount = count() by bin(TimeGenerated, 5m) | where ErrorCount > 10'
+          query: 'ContainerAppConsoleLogs | where ContainerAppName == "${containerAppName}" | where Log contains "error" or Log contains "Error" or Log contains "ERROR" | where Log contains "401" or Log contains "403" or Log contains "authentication" or Log contains "unauthorized" | summarize ErrorCount = count() by bin(TimeGenerated, 5m) | where ErrorCount > 10'
           timeAggregation: 'Count'
           operator: 'GreaterThan'
           threshold: 0
@@ -90,7 +90,7 @@ resource restartAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview
     criteria: {
       allOf: [
         {
-          query: 'ContainerAppSystemLogs_CL | where ContainerAppName_s == "${containerAppName}" | where Reason_s == "ContainerStarted" or Reason_s == "Pulling" | summarize RestartCount = count() by bin(TimeGenerated, 15m) | where RestartCount > 3'
+          query: 'ContainerAppSystemLogs | where ContainerAppName == "${containerAppName}" | where Reason == "ContainerStarted" or Reason == "Pulling" | summarize RestartCount = count() by bin(TimeGenerated, 15m) | where RestartCount > 3'
           timeAggregation: 'Count'
           operator: 'GreaterThan'
           threshold: 0
@@ -125,7 +125,7 @@ resource unusualActivityAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15
     criteria: {
       allOf: [
         {
-          query: 'ContainerAppConsoleLogs_CL | where ContainerAppName_s == "${containerAppName}" | where Log_s contains "received message" or Log_s contains "[discord]" or Log_s contains "[telegram]" | summarize MessageCount = count() by bin(TimeGenerated, 1h) | where MessageCount > 100'
+          query: 'ContainerAppConsoleLogs | where ContainerAppName == "${containerAppName}" | where Log contains "received message" or Log contains "[discord]" or Log contains "[telegram]" | summarize MessageCount = count() by bin(TimeGenerated, 1h) | where MessageCount > 100'
           timeAggregation: 'Count'
           operator: 'GreaterThan'
           threshold: 0
@@ -160,7 +160,7 @@ resource disconnectAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-prev
     criteria: {
       allOf: [
         {
-          query: 'ContainerAppConsoleLogs_CL | where ContainerAppName_s == "${containerAppName}" | where Log_s contains "channel exited" or Log_s contains "disconnected" or Log_s contains "connection closed" | summarize DisconnectCount = count() by bin(TimeGenerated, 15m) | where DisconnectCount > 0'
+          query: 'ContainerAppConsoleLogs | where ContainerAppName == "${containerAppName}" | where Log contains "channel exited" or Log contains "disconnected" or Log contains "connection closed" | summarize DisconnectCount = count() by bin(TimeGenerated, 15m) | where DisconnectCount > 0'
           timeAggregation: 'Count'
           operator: 'GreaterThan'
           threshold: 0

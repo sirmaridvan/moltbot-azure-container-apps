@@ -10,6 +10,9 @@ param tags object = {}
 @description('Container Apps Environment ID')
 param containerAppsEnvironmentId string
 
+@description('Container Apps Environment default domain')
+param containerAppsEnvironmentDefaultDomain string
+
 @description('Container Registry Name')
 param containerRegistryName string
 
@@ -25,17 +28,12 @@ param imageTag string = 'latest'
 @description('Use official GHCR image instead of ACR (not recommended - build from source instead)')
 param useOfficialImage bool = false
 
-@description('Anthropic API key')
-@secure()
-param anthropicApiKey string = ''
-
-@description('OpenRouter API key')
-@secure()
-param openRouterApiKey string = ''
-
 @description('OpenAI API key')
 @secure()
 param openaiApiKey string = ''
+
+@description('OpenAI-compatible base URL (use Azure AI Foundry endpoint when applicable)')
+param openaiBaseUrl string = ''
 
 @description('Telegram Bot Token')
 @secure()
@@ -44,13 +42,6 @@ param telegramBotToken string = ''
 @description('Telegram Allowed User ID')
 param telegramAllowedUserId string = ''
 
-@description('Discord Bot Token')
-@secure()
-param discordBotToken string = ''
-
-@description('Discord User IDs allowed to DM the bot (comma-separated)')
-param discordAllowedUsers string = ''
-
 @description('ClawdBot Gateway Token for authentication')
 @secure()
 param clawdbotGatewayToken string = ''
@@ -58,8 +49,8 @@ param clawdbotGatewayToken string = ''
 @description('ClawdBot Persona Name')
 param clawdbotPersonaName string = 'Clawd'
 
-@description('ClawdBot Model - must use exact OpenRouter model ID')
-param clawdbotModel string = 'openrouter/anthropic/claude-3.5-sonnet'
+@description('ClawdBot Model (e.g., openai/gpt-5-mini for Azure AI Foundry)')
+param clawdbotModel string = 'openai/gpt-5-mini'
 
 @description('Container CPU cores')
 param containerCpu string = '1.0'
@@ -163,28 +154,16 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       ]
       secrets: [
         {
-          name: 'anthropic-api-key'
-          value: !empty(anthropicApiKey) ? anthropicApiKey : 'not-set'
-        }
-        {
-          name: 'openrouter-api-key'
-          value: !empty(openRouterApiKey) ? openRouterApiKey : 'not-set'
-        }
-        {
           name: 'openai-api-key'
-          value: !empty(openaiApiKey) ? openaiApiKey : 'not-set'
+          value: !empty(openaiApiKey) ? openaiApiKey : ''
         }
         {
           name: 'telegram-bot-token'
-          value: !empty(telegramBotToken) ? telegramBotToken : 'not-set'
-        }
-        {
-          name: 'discord-bot-token'
-          value: !empty(discordBotToken) ? discordBotToken : 'not-set'
+          value: !empty(telegramBotToken) ? telegramBotToken : ''
         }
         {
           name: 'gateway-token'
-          value: !empty(clawdbotGatewayToken) ? clawdbotGatewayToken : 'not-set'
+          value: !empty(clawdbotGatewayToken) ? clawdbotGatewayToken : ''
         }
         {
           name: 'storage-connection-string'
@@ -204,16 +183,12 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
           }
           env: [
             {
-              name: 'ANTHROPIC_API_KEY'
-              secretRef: 'anthropic-api-key'
-            }
-            {
-              name: 'OPENROUTER_API_KEY'
-              secretRef: 'openrouter-api-key'
-            }
-            {
               name: 'OPENAI_API_KEY'
               secretRef: 'openai-api-key'
+            }
+            {
+              name: 'OPENAI_BASE_URL'
+              value: openaiBaseUrl
             }
             {
               name: 'TELEGRAM_BOT_TOKEN'
@@ -222,14 +197,6 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
             {
               name: 'TELEGRAM_ALLOWED_USER_ID'
               value: telegramAllowedUserId
-            }
-            {
-              name: 'DISCORD_BOT_TOKEN'
-              secretRef: 'discord-bot-token'
-            }
-            {
-              name: 'DISCORD_ALLOWED_USERS'
-              value: discordAllowedUsers
             }
             {
               name: 'CLAWDBOT_GATEWAY_TOKEN'
@@ -250,6 +217,10 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
             {
               name: 'GATEWAY_BIND'
               value: '0.0.0.0'
+            }
+            {
+              name: 'CONTAINER_APP_FQDN'
+              value: '${name}.${containerAppsEnvironmentDefaultDomain}'
             }
             {
               name: 'NODE_ENV'

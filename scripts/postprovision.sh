@@ -30,13 +30,9 @@ fi
 
 echo "   ACR Login Server: $ACR_LOGIN_SERVER"
 
-# Log in to ACR
-echo "   Logging in to ACR..."
-az acr login --name "$CONTAINER_REGISTRY_NAME"
-
-# Build and push the ClawdBot image
+# Build and push the ClawdBot image using ACR Tasks (no local Docker required)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DOCKERFILE_PATH="$SCRIPT_DIR/../src/clawdbot"
+DOCKERFILE_PATH="$SCRIPT_DIR/../src/moltbot"
 
 if [ -f "$DOCKERFILE_PATH/Dockerfile" ]; then
     echo "   Building container image (this may take a few minutes)..."
@@ -46,14 +42,8 @@ if [ -f "$DOCKERFILE_PATH/Dockerfile" ]; then
         --file "$DOCKERFILE_PATH/Dockerfile" \
         "$DOCKERFILE_PATH"
 else
-    # Use the official ClawdBot image from GitHub Container Registry
-    echo "   No custom Dockerfile found. Using official ClawdBot image..."
-    echo "   Importing official ClawdBot image from GitHub Container Registry..."
-    az acr import \
-        --name "$CONTAINER_REGISTRY_NAME" \
-        --source ghcr.io/clawdbot/clawdbot:latest \
-        --image clawdbot:latest \
-        --force
+    echo "ERROR: Dockerfile not found at $DOCKERFILE_PATH/Dockerfile"
+    exit 1
 fi
 
 echo ""
