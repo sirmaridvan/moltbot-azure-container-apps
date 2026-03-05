@@ -1,13 +1,15 @@
 # 🦞 MoltBot on Azure Container Apps
 
-Deploy your personal AI assistant to Azure Container Apps with Discord integration. This sample shows how to run [MoltBot](https://molt.bot) - an open-source personal AI assistant - on Azure's serverless container platform.
+Deploy your personal AI assistant to Azure Container Apps with Telegram and Discord integration. This sample shows how to run [MoltBot](https://molt.bot) - an open-source personal AI assistant - on Azure's serverless container platform.
 
 ## What You'll Get
 
 - 🦞 **MoltBot AI Assistant** running on Azure Container Apps
-- 💬 **Discord Integration** - Chat with your AI via Discord DMs
-- 🔐 **Secure by Default** - Gateway token authentication + DM allowlist
+- 💬 **Multi-channel** - Chat via Telegram (recommended), Discord, and more
+- 🧠 **Azure AI Foundry** - Enterprise-grade LLM access with managed model deployments
+- 🔐 **Secure by Default** - Gateway token authentication + DM allowlist + automatic HTTPS
 - 📊 **Azure Monitoring** - Full observability via Log Analytics
+- 💾 **Persistent Storage** - Azure Storage for data that survives restarts
 
 ## Architecture
 
@@ -19,19 +21,20 @@ Deploy your personal AI assistant to Azure Container Apps with Discord integrati
 │  │                  Azure Container Apps Environment                       ││
 │  │                                                                         ││
 │  │  ┌───────────────────────────────────────────────────────────────────┐  ││
-│  │  │                    MoltBot Container App                          │  ││
+│  │  │                    🦞 MoltBot Container App                       │  ││
 │  │  │                                                                    │  ││
-│  │  │  • Gateway (port 18789)          • Discord Bot Connection         │  ││
-│  │  │  • Control UI (web chat)         • OpenRouter API Integration     │  ││
-│  │  │  • Dynamic Config Generation     • DM Allowlist Security          │  ││
+│  │  │  • Gateway (port 18789)          • Telegram Bot Connection        │  ││
+│  │  │  • Control UI (web chat)         • Discord Bot Connection         │  ││
+│  │  │  • Dynamic Config Generation     • Azure AI Foundry Integration   │  ││
+│  │  │  • DM Allowlist Security         • Skills & Automation            │  ││
 │  │  └───────────────────────────────────────────────────────────────────┘  ││
 │  └─────────────────────────────────────────────────────────────────────────┘│
 │                                                                             │
 │  ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐ │
-│  │  Container Registry │  │   Managed Identity  │  │  Log Analytics     │ │
-│  │                     │  │                     │  │                     │ │
-│  │  Stores MoltBot    │  │  Secure ACR access  │  │  Logs & metrics    │ │
-│  │  container image    │  │  (no passwords!)    │  │  for monitoring    │ │
+│  │  📦 Container       │  │   💾 Storage        │  │  📊 Log Analytics  │ │
+│  │     Registry        │  │     Account         │  │                     │ │
+│  │  Stores MoltBot    │  │  Persistent data    │  │  Logs & metrics    │ │
+│  │  container image    │  │  for sessions       │  │  for monitoring    │ │
 │  └─────────────────────┘  └─────────────────────┘  └─────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -41,32 +44,24 @@ Deploy your personal AI assistant to Azure Container Apps with Discord integrati
 - ✅ Azure subscription with Contributor access
 - ✅ [Azure Developer CLI (azd)](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd) installed
 - ✅ [Azure CLI](https://docs.microsoft.com/cli/azure/install-azure-cli) installed
-- ✅ [OpenRouter API key](https://openrouter.ai/keys) for LLM access
-- ✅ Discord account for bot creation
+- ✅ [Azure AI Foundry](https://ai.azure.com) model deployment + API key
+- ✅ Telegram account (recommended) or Discord account for bot creation
 
 ## One-Click Deployment with azd
 
 The fastest way to deploy MoltBot is using Azure Developer CLI (`azd`). This provisions all infrastructure, builds the container image, and deploys everything in one command.
 
-### Step 1: Create Discord Bot (Do This First!)
+### Step 1: Create Your Telegram Bot (Do This First!)
 
-Before deploying, you need a Discord bot token:
+**⚠️ Important:** Do this before running `azd up` — you'll need the bot token during deployment.
 
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click **New Application** → Name it (e.g., "MoltBot-Azure")
-3. Go to **Bot** → Click **Add Bot** (or **Reset Token** if exists)
-4. Enable these **Privileged Gateway Intents**:
-   - ✅ Message Content Intent
-   - ✅ Server Members Intent
-5. Click **Reset Token** → **Copy the bot token** (save it!)
-6. Go to **OAuth2 → URL Generator**:
-   - Scopes: `bot`, `applications.commands`
-   - Bot Permissions: `Send Messages`, `Read Message History`, `View Channels`
-7. **Copy the generated OAuth2 URL** - you'll need this to invite the bot later
+1. Open Telegram and start a chat with **@BotFather**
+2. Send `/newbot` and follow the prompts
+3. Copy the **bot token** (save it securely!)
+4. Start a chat with your new bot and send `hello`
+5. Get your **Telegram User ID** (use @userinfobot or @getmyid_bot)
 
-**Get Your Discord User ID:**
-1. In Discord: Settings → Advanced → Enable **Developer Mode**
-2. Right-click your username → **Copy User ID**
+> **🔐 Security Note:** The Telegram User ID is used for the allowlist. Only users in this list can message your bot.
 
 ### Step 2: Provision Infrastructure
 
@@ -87,6 +82,18 @@ When prompted, enter:
 - **Azure subscription**: Select your subscription
 - **Location**: e.g., `eastus2`
 
+> **Note:** `azd provision` creates the Azure infrastructure without deploying the app. We need to build the image first.
+
+This creates:
+
+| Step | What Happens |
+|:----:|--------------|
+| 1️⃣ | Creates a Resource Group |
+| 2️⃣ | Deploys Azure Container Registry |
+| 3️⃣ | Sets up Azure Storage for persistent data |
+| 4️⃣ | Creates a Container Apps Environment |
+| 5️⃣ | Configures Log Analytics for monitoring |
+
 ### Step 3: Build the Container Image
 
 **⚠️ Required before deploying.** The container image must exist in ACR first.
@@ -100,15 +107,21 @@ az acr build --registry $ACR_NAME --image "MoltBot:latest" --file src/MoltBot/Do
 ```
 
 **Understanding this command:**
-- `--registry $ACR_NAME` - Build in your ACR (in the cloud)
-- `--image "MoltBot:latest"` - Name the output image (we choose this name)
-- `--file src/MoltBot/Dockerfile` - Use the Dockerfile from this repo
-- `src/MoltBot/` - Send this folder as build context
+
+| Part | What It Does |
+|------|--------------|
+| `--registry $ACR_NAME` | Build in your Azure Container Registry (in the cloud) |
+| `--image "MoltBot:latest"` | Name the output image `MoltBot:latest` (we choose this name) |
+| `--file src/MoltBot/Dockerfile` | Use the Dockerfile from our sample repo |
+| `src/MoltBot/` | Send this folder as the build context |
 
 This takes about 3-5 minutes. The Dockerfile automatically:
-1. Clones the official [MoltBot source](https://github.com/MoltBot/MoltBot) from GitHub
-2. Installs dependencies and builds the app
-3. Adds our custom `entrypoint.sh` for Azure configuration
+1. Starts from a Node.js base image
+2. Clones the official [MoltBot source](https://github.com/MoltBot/MoltBot) from GitHub
+3. Installs dependencies with pnpm
+4. Builds the TypeScript application
+5. Builds the Control UI
+6. Adds our custom `entrypoint.sh` that generates config from Azure environment variables
 
 > **Note:** You don't need to download MoltBot separately - it's pulled fresh during the build. The resulting image is stored in your ACR as `MoltBot:latest`.
 
@@ -116,25 +129,34 @@ This takes about 3-5 minutes. The Dockerfile automatically:
 
 ```bash
 # Set your required secrets
-azd env set OPENROUTER_API_KEY "sk-or-v1-your-key-here"
-azd env set DISCORD_BOT_TOKEN "your-discord-bot-token"
-azd env set DISCORD_ALLOWED_USERS "your-discord-user-id"
+azd env set OPENAI_API_KEY "your-azure-ai-foundry-key"
+azd env set OPENAI_BASE_URL "https://<your-foundry-endpoint>"
+azd env set TELEGRAM_BOT_TOKEN "your-telegram-bot-token"
+azd env set TELEGRAM_ALLOWED_USER_ID "your-telegram-user-id"
 ```
 
 **Where to get these values:**
 
 | Variable | Where to Get It |
 |----------|-----------------|
-| `OPENROUTER_API_KEY` | [openrouter.ai/keys](https://openrouter.ai/keys) |
-| `DISCORD_BOT_TOKEN` | Discord Developer Portal → Your App → Bot → Reset Token |
-| `DISCORD_ALLOWED_USERS` | Discord → Settings → Advanced → Developer Mode → Right-click username → Copy User ID |
+| `OPENAI_API_KEY` | Azure AI Foundry → Your project → Model endpoint → API key |
+| `OPENAI_BASE_URL` | Azure AI Foundry → Your project → Model endpoint URL |
+| `TELEGRAM_BOT_TOKEN` | Telegram → @BotFather → `/newbot` |
+| `TELEGRAM_ALLOWED_USER_ID` | Telegram → @userinfobot or @getmyid_bot |
 
 **Optional settings:**
 
 ```bash
-azd env set MOLTBOT_MODEL "openrouter/anthropic/claude-3.5-sonnet"
+# Change the AI model (use your Azure AI Foundry deployment name)
+azd env set MOLTBOT_MODEL "gpt-5-mini"
+
+# Change the bot's name
 azd env set MOLTBOT_PERSONA_NAME "Clawd"
-azd env set ALLOWED_IP_RANGES "1.2.3.4/32"  # IP restrictions
+
+# Add IP restrictions (for security)
+azd env set ALLOWED_IP_RANGES "1.2.3.4/32"
+
+# Enable email alerts
 azd env set ALERT_EMAIL_ADDRESS "your-email@example.com"
 ```
 
@@ -144,13 +166,16 @@ azd env set ALERT_EMAIL_ADDRESS "your-email@example.com"
 azd deploy
 ```
 
-### Step 6: Invite Bot to Server & Test
+This deploys MoltBot to Container Apps with all your secrets configured.
 
-1. **Open the OAuth2 URL** from Step 1 to invite the bot to a server
-2. **Find the bot** in the server's member list
-3. **Right-click → Message** to start a DM
-4. Send: `Hello!` 
-5. Wait a few seconds for the response 🎉
+> **⚠️ Important:** If you change any environment variables later, run `azd deploy` again to apply them.
+
+### Step 6: Start Chatting! 🎉
+
+1. Open Telegram and search for your bot by username
+2. Tap **Start** to begin a chat
+3. Send: `Hello!`
+4. Wait a few seconds for the response
 
 ### What Gets Deployed
 
@@ -166,14 +191,53 @@ azd deploy
 ### Updating After Deployment
 
 ```bash
-# Change configuration (e.g., add another Discord user)
-azd env set DISCORD_ALLOWED_USERS "user1-id,user2-id"
+# Change configuration (e.g., add a Discord channel)
+azd env set DISCORD_BOT_TOKEN "your-discord-token"
+azd env set DISCORD_ALLOWED_USERS "your-discord-user-id"
 azd deploy
 
 # Rebuild image with latest MoltBot
 az acr build --registry $ACR_NAME --image "MoltBot:latest" --file src/MoltBot/Dockerfile src/MoltBot/
 azd deploy
 ```
+
+---
+
+## Adding More Channels
+
+### Telegram (Recommended)
+
+```bash
+azd env set TELEGRAM_BOT_TOKEN "your-telegram-token"
+azd env set TELEGRAM_ALLOWED_USER_ID "user-id-1,user-id-2"  # Comma-separated for multiple users
+azd deploy
+```
+
+### Discord (Optional)
+
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Click **New Application** → Name it (e.g., "MoltBot-Azure")
+3. Go to **Bot** → Click **Add Bot** (or **Reset Token** if exists)
+4. Enable these **Privileged Gateway Intents**:
+   - ✅ Message Content Intent
+   - ✅ Server Members Intent
+5. Click **Reset Token** → **Copy the bot token** (save it!)
+6. Go to **OAuth2 → URL Generator**:
+   - Scopes: `bot`, `applications.commands`
+   - Bot Permissions: `Send Messages`, `Read Message History`, `View Channels`
+7. Copy the generated URL and invite the bot to your server
+
+```bash
+azd env set DISCORD_BOT_TOKEN "your-discord-token"
+azd env set DISCORD_ALLOWED_USERS "your-discord-user-id"
+azd deploy
+```
+
+> **Note:** Discord requires you to share a server with the bot before you can DM it.
+
+### WhatsApp
+
+Requires the desktop wizard to scan a QR code — not supported in headless container deployments.
 
 ---
 
@@ -237,23 +301,12 @@ This takes about 5 minutes. The build:
 4. Builds the Control UI
 5. Copies our custom `entrypoint.sh` for Azure configuration
 
-### Step 3: Create Discord Bot
+### Step 3: Create Telegram Bot
 
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click **New Application** → Name it (e.g., "MoltBot-Azure")
-3. Go to **Bot** → Click **Add Bot**
-4. Enable these **Privileged Gateway Intents**:
-   - ✅ Message Content Intent
-   - ✅ Server Members Intent
-5. Click **Reset Token** → Copy the bot token (save it securely!)
-6. Go to **OAuth2 → URL Generator**:
-   - Scopes: `bot`, `applications.commands`
-   - Bot Permissions: `Send Messages`, `Read Message History`, `View Channels`
-7. Copy the generated URL and open it to invite the bot to your server
-
-**Get Your Discord User ID:**
-1. In Discord: Settings → Advanced → Enable **Developer Mode**
-2. Right-click your username → **Copy User ID**
+1. Open Telegram and start a chat with **@BotFather**
+2. Send `/newbot` and follow the prompts
+3. Copy the **bot token** (save it securely!)
+4. Get your **Telegram User ID** (use @userinfobot or @getmyid_bot)
 
 ### Step 4: Generate Gateway Token
 
@@ -268,9 +321,10 @@ echo "Gateway Token: $GATEWAY_TOKEN"
 
 ```bash
 # Set your actual values here
-OPENROUTER_API_KEY="sk-or-v1-your-key-here"
-DISCORD_BOT_TOKEN="your-discord-bot-token"
-DISCORD_USER_ID="your-discord-user-id"
+OPENAI_API_KEY="your-azure-ai-foundry-key"
+OPENAI_BASE_URL="https://<your-foundry-endpoint>"
+TELEGRAM_BOT_TOKEN="your-telegram-bot-token"
+TELEGRAM_USER_ID="your-telegram-user-id"
 
 # Create the Container App with secrets
 az containerapp create \
@@ -288,15 +342,16 @@ az containerapp create \
   --cpu 1.0 \
   --memory 2Gi \
   --secrets \
-    "openrouter-api-key=$OPENROUTER_API_KEY" \
-    "discord-bot-token=$DISCORD_BOT_TOKEN" \
+    "openai-api-key=$OPENAI_API_KEY" \
+    "telegram-bot-token=$TELEGRAM_BOT_TOKEN" \
     "gateway-token=$GATEWAY_TOKEN" \
   --env-vars \
-    "OPENROUTER_API_KEY=secretref:openrouter-api-key" \
-    "DISCORD_BOT_TOKEN=secretref:discord-bot-token" \
+    "OPENAI_API_KEY=secretref:openai-api-key" \
+    "OPENAI_BASE_URL=$OPENAI_BASE_URL" \
+    "TELEGRAM_BOT_TOKEN=secretref:telegram-bot-token" \
     "MOLTBOT_GATEWAY_TOKEN=secretref:gateway-token" \
-    "DISCORD_ALLOWED_USERS=$DISCORD_USER_ID" \
-    "MOLTBOT_MODEL=openrouter/anthropic/claude-3.5-sonnet" \
+    "TELEGRAM_ALLOWED_USER_ID=$TELEGRAM_USER_ID" \
+    "MOLTBOT_MODEL=gpt-5-mini" \
     "MOLTBOT_PERSONA_NAME=Clawd" \
     "GATEWAY_PORT=18789" \
     "NODE_ENV=production"
@@ -311,23 +366,26 @@ az containerapp show --name $APP_NAME --resource-group $RESOURCE_GROUP --query "
 
 ## Testing Your Bot
 
-### Via Discord (Recommended)
+### Via Telegram (Recommended)
+
+1. Open Telegram and search for your bot by username
+2. Tap **Start** to begin a chat
+3. Send: `Hello!`
+4. Wait a few seconds for the response
+
+### Via Discord (Optional)
 
 **Important:** Discord requires you to share a server with the bot before you can DM it.
 
 1. **Create or use an existing Discord server** where you can add the bot
-2. **Invite the bot** using the OAuth2 URL you generated earlier:
-   ```
-   https://discord.com/oauth2/authorize?client_id=<BOT_USER_ID>&permissions=274877991936&scope=bot%20applications.commands
-   ```
+2. **Invite the bot** using the OAuth2 URL you generated
 3. **Find the bot** in the server's member list (right sidebar)
 4. **Right-click the bot → Message** to open a DM
 5. Send: `Hello!`
-6. Wait a few seconds for the response
 
 ### Via Control UI (Web Chat)
 
-The Control UI is available but shows "pairing required" by default. Discord DMs are the primary interface.
+The Control UI is available but shows "pairing required" by default. Telegram DMs are the primary interface.
 
 To access the Control UI:
 ```
@@ -340,12 +398,15 @@ https://<your-app-url>/?token=<your-gateway-token>
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OPENROUTER_API_KEY` | ✅ | OpenRouter API key for LLM access |
-| `DISCORD_BOT_TOKEN` | ✅ | Discord bot token from Developer Portal |
-| `MOLTBOT_GATEWAY_TOKEN` | ✅ | Random token for gateway authentication |
-| `DISCORD_ALLOWED_USERS` | ✅ | Your Discord user ID (DM allowlist) |
-| `MOLTBOT_MODEL` | No | Model ID (default: `openrouter/anthropic/claude-3.5-sonnet`) |
+| `OPENAI_API_KEY` | ✅ | Azure AI Foundry API key for LLM access |
+| `OPENAI_BASE_URL` | ✅ | Azure AI Foundry model endpoint URL |
+| `TELEGRAM_BOT_TOKEN` | ✅ | Telegram bot token from @BotFather |
+| `TELEGRAM_ALLOWED_USER_ID` | ✅ | Your Telegram user ID (DM allowlist) |
+| `MOLTBOT_GATEWAY_TOKEN` | ✅ | Random token for gateway authentication (auto-generated if not set) |
+| `MOLTBOT_MODEL` | No | Azure AI Foundry deployment name (default: `gpt-5-mini`) |
 | `MOLTBOT_PERSONA_NAME` | No | Bot name (default: `Clawd`) |
+| `DISCORD_BOT_TOKEN` | No | Discord bot token (optional channel) |
+| `DISCORD_ALLOWED_USERS` | No | Discord user ID for DM allowlist |
 
 ### Security Parameters (azd)
 
@@ -368,20 +429,32 @@ azd env set ALERT_EMAIL_ADDRESS "security@example.com"
 azd deploy
 ```
 
-### Supported Models (via OpenRouter)
+### Supported Models (via Azure AI Foundry)
 
-| Model | ID |
-|-------|-----|
-| Claude 3.5 Sonnet | `openrouter/anthropic/claude-3.5-sonnet` |
-| Claude 3 Opus | `openrouter/anthropic/claude-3-opus` |
-| GPT-4 Turbo | `openrouter/openai/gpt-4-turbo` |
-| Gemini Pro | `openrouter/google/gemini-pro` |
+You can use any model you deploy in Azure AI Foundry. The value of `MOLTBOT_MODEL` must match your **deployment name** exactly.
 
-**⚠️ Important:** Model IDs must use the exact format shown. For example:
-- ✅ `openrouter/anthropic/claude-3.5-sonnet`
-- ❌ `openrouter/anthropic/claude-sonnet-4-5` (doesn't exist)
+| Model | Deployment Name (Example) | Notes |
+|-------|---------------------------|-------|
+| GPT-5 mini | `gpt-5-mini` | **Recommended** — fast, cost-effective (default) |
+| GPT-4o mini | `gpt-4o-mini` | Previous generation, still solid |
+| GPT-4o | `gpt-4o` | Higher quality |
+| GPT-4.1 | `gpt-4.1` | Strong reasoning |
 
-See [OpenRouter Models](https://openrouter.ai/models) for the full list.
+Change model:
+```bash
+azd env set MOLTBOT_MODEL "<your-foundry-deployment-name>"
+azd deploy
+```
+
+> **⚠️ Important:** The deployment name must match exactly (case-sensitive). The entrypoint auto-prefixes bare model names — if you set `MOLTBOT_MODEL=gpt-5-mini`, it becomes `openai/gpt-5-mini`.
+
+### Custom Persona
+
+Change your bot's personality:
+```bash
+azd env set MOLTBOT_PERSONA_NAME "Jarvis"
+azd deploy
+```
 
 ### How the Entrypoint Works
 
@@ -391,12 +464,12 @@ The `entrypoint.sh` script dynamically generates MoltBot's configuration from en
 {
   "agents": {
     "defaults": {
-      "model": { "primary": "openrouter/anthropic/claude-3.5-sonnet" }
+      "model": { "primary": "openai/gpt-5-mini" }
     },
     "list": [{ "id": "main", "identity": { "name": "Clawd" } }]
   },
   "channels": {
-    "discord": {
+    "telegram": {
       "enabled": true,
       "dm": { "policy": "allowlist", "allowFrom": ["your-user-id"] }
     }
@@ -407,10 +480,15 @@ The `entrypoint.sh` script dynamically generates MoltBot's configuration from en
 }
 ```
 
+The entrypoint script also:
+- **Detects Azure OpenAI endpoints** and overrides the provider config with the correct base URL and `api-key` auth header (since MoltBot's built-in OpenAI provider ignores `OPENAI_BASE_URL`)
+- **Auto-prefixes bare model names** — if you set `MOLTBOT_MODEL=gpt-5-mini`, it becomes `openai/gpt-5-mini`
+
 This approach:
 - Keeps secrets out of the container image
 - Allows configuration changes without rebuilding
 - Generates proper MoltBot JSON config format
+- Handles Azure AI Foundry routing automatically
 
 ## Updating Your Bot
 
@@ -419,11 +497,11 @@ This approach:
 ```bash
 # Change model
 az containerapp update --name $APP_NAME --resource-group $RESOURCE_GROUP \
-  --set-env-vars "MOLTBOT_MODEL=openrouter/anthropic/claude-3-opus"
+  --set-env-vars "MOLTBOT_MODEL=gpt-4o"
 
-# Add another allowed Discord user
+# Add another allowed Telegram user
 az containerapp update --name $APP_NAME --resource-group $RESOURCE_GROUP \
-  --set-env-vars "DISCORD_ALLOWED_USERS=user1-id,user2-id"
+  --set-env-vars "TELEGRAM_ALLOWED_USER_ID=user1-id,user2-id"
 ```
 
 ### Update Secrets
@@ -431,7 +509,7 @@ az containerapp update --name $APP_NAME --resource-group $RESOURCE_GROUP \
 ```bash
 # Update API key
 az containerapp secret set --name $APP_NAME --resource-group $RESOURCE_GROUP \
-  --secrets "openrouter-api-key=sk-or-v1-new-key"
+  --secrets "openai-api-key=your-new-key"
 
 # Restart to apply secret changes
 REVISION=$(az containerapp show --name $APP_NAME --resource-group $RESOURCE_GROUP --query "properties.latestRevisionName" -o tsv)
@@ -468,56 +546,127 @@ az containerapp logs show --name $APP_NAME --resource-group $RESOURCE_GROUP \
 
 ✅ **Healthy startup:**
 ```
-Discord channel configured: yes (DM allowlist: 123456789)
+Telegram channel configured: yes (allowlist: 123456789)
 MoltBot configuration written to /home/node/.MoltBot/MoltBot.json
 Gateway token configured: yes
-[discord] logged in to discord as 987654321
-[gateway] agent model: openrouter/anthropic/claude-3.5-sonnet
+[telegram] connected
+[gateway] agent model: openai/gpt-5-mini
 [gateway] listening on ws://0.0.0.0:18789
 ```
 
 ❌ **Common errors:**
-- `Unknown model: ...` - Check the model ID format (must be exact)
-- `HTTP 401: authentication_error` - Invalid API key
+- `Unknown model: ...` - Model name must match your Azure AI Foundry deployment name exactly
+- `HTTP 401: authentication_error` - Invalid API key or requests hitting wrong endpoint
+- `[telegram] channel exited` - Invalid Telegram bot token
 - `[discord] channel exited` - Invalid Discord bot token
 
 ## Troubleshooting
 
-### Bot doesn't respond in Discord
+### Container Image Not Found (MANIFEST_UNKNOWN)
 
-1. **Check logs** for errors:
-   ```bash
-   az containerapp logs show --name $APP_NAME --resource-group $RESOURCE_GROUP --tail 50
-   ```
+**Problem:** Logs show `MANIFEST_UNKNOWN: manifest tagged by "latest" is not found`
 
-2. **Verify Discord connection:**
-   Look for: `[discord] logged in to discord as <bot-id>`
+**Cause:** The container image wasn't built before deployment.
 
-3. **Check DM allowlist:** 
-   Make sure your Discord user ID is in `DISCORD_ALLOWED_USERS`
+**Solution:** Build the image manually:
+```bash
+ACR_NAME=$(az acr list --resource-group rg-MoltBot-prod --query "[0].name" -o tsv)
+az acr build --registry $ACR_NAME --image "MoltBot:latest" --file src/MoltBot/Dockerfile src/MoltBot/
+azd deploy
+```
 
-4. **Verify model format:** 
-   Must be exactly `openrouter/anthropic/claude-3.5-sonnet` (not variations like `claude-sonnet-4-5`)
+### Windows Line Endings Breaking entrypoint.sh
+
+**Problem:** Logs show `exec /app/entrypoint.sh: no such file or directory`
+
+**Cause:** Windows CRLF line endings in shell scripts break Linux containers.
+
+**Solution:** Convert to Unix line endings before building:
+```powershell
+# PowerShell - convert CRLF to LF
+$content = Get-Content src/MoltBot/entrypoint.sh -Raw
+$content -replace "`r`n", "`n" | Set-Content src/MoltBot/entrypoint.sh -NoNewline
+```
+
+Then rebuild the image:
+```bash
+az acr build --registry $ACR_NAME --image "MoltBot:latest" --file src/MoltBot/Dockerfile src/MoltBot/
+```
+
+### Secrets Not Applied (Telegram Unauthorized)
+
+**Problem:** Logs show Telegram auth errors or the bot never connects.
+
+**Cause:** `azd env set` stores values locally, but they weren't applied to the container.
+
+**Solution:** Manually set secrets on the container app:
+```bash
+RESOURCE_GROUP="rg-MoltBot-prod"
+APP_NAME="MoltBot"
+
+az containerapp secret set --name $APP_NAME --resource-group $RESOURCE_GROUP \
+  --secrets "telegram-bot-token=YOUR_ACTUAL_TOKEN"
+
+az containerapp update --name $APP_NAME --resource-group $RESOURCE_GROUP \
+  --set-env-vars "TELEGRAM_ALLOWED_USER_ID=YOUR_TELEGRAM_USER_ID"
+
+# Restart to apply
+REVISION=$(az containerapp show --name $APP_NAME --resource-group $RESOURCE_GROUP \
+  --query "properties.latestRevisionName" -o tsv)
+az containerapp revision restart --name $APP_NAME --resource-group $RESOURCE_GROUP --revision $REVISION
+```
 
 ### "Unknown model" Error
 
-The model ID format is very specific. Common mistakes:
-- ❌ `anthropic/claude-sonnet-4-5` → Model doesn't exist
-- ❌ `openrouter:anthropic/claude-3.5-sonnet` → Wrong prefix format
-- ✅ `openrouter/anthropic/claude-3.5-sonnet` → Correct!
+**Problem:** MoltBot logs show `Unknown model: <your-model>`
 
-### API Authentication Errors (401)
+**Cause:** The model name must match your **Azure AI Foundry deployment name** exactly.
 
-1. Verify your OpenRouter API key at [openrouter.ai/keys](https://openrouter.ai/keys)
-2. Check the key has credits available
-3. Update the secret:
-   ```bash
-   az containerapp secret set --name $APP_NAME --resource-group $RESOURCE_GROUP \
-     --secrets "openrouter-api-key=sk-or-v1-correct-key"
-   ```
-4. Restart the container to apply
+**Solution:**
+```bash
+azd env set MOLTBOT_MODEL "<your-foundry-deployment-name>"
+azd deploy
+```
 
-### Container won't start
+### HTTP 401 Authentication Error
+
+**Problem:** Logs show `HTTP 401: authentication_error` or `Incorrect API key provided`
+
+**Cause:** This can happen for two reasons:
+1. Invalid or expired API key
+2. **Requests hitting `api.openai.com` instead of your Azure endpoint** — MoltBot's built-in OpenAI provider ignores the `OPENAI_BASE_URL` environment variable. Our entrypoint script works around this by overriding the provider config when it detects an Azure endpoint.
+
+**Solution:**
+```bash
+# 1. Check the logs to see which URL is being called
+az containerapp logs show --name MoltBot --resource-group rg-MoltBot-prod --tail 50 \
+  | grep -i "url\|401\|error"
+
+# 2. If logs show api.openai.com — ensure OPENAI_BASE_URL contains your Azure endpoint
+azd env set OPENAI_BASE_URL "https://<your-resource>.cognitiveservices.azure.com/openai/v1/"
+
+# 3. If the key itself is wrong — update it
+azd env set OPENAI_API_KEY "your-actual-key"
+
+# 4. Redeploy
+azd deploy
+```
+
+> **💡 How does the fix work?** The entrypoint detects `cognitiveservices` or `openai.azure` in `OPENAI_BASE_URL` and automatically overrides the provider in MoltBot's JSON config with your Azure base URL and `api-key` authentication header.
+
+### Bot Doesn't Respond on Telegram
+
+**Problem:** Bot is online but ignores your messages.
+
+**Cause:** Your Telegram user ID isn't in the allowlist.
+
+**Solution:**
+```bash
+azd env set TELEGRAM_ALLOWED_USER_ID "your-telegram-user-id"
+azd deploy
+```
+
+### Container Won't Start
 
 1. Check if image exists:
    ```bash
@@ -529,7 +678,7 @@ The model ID format is very specific. Common mistakes:
    az role assignment list --assignee $IDENTITY_PRINCIPAL_ID --scope $ACR_ID
    ```
 
-### Can't DM the bot
+### Can't DM the Discord Bot
 
 Discord requires bots and users to share at least one server:
 1. Create a private Discord server (just for you and the bot)
@@ -542,12 +691,12 @@ This deployment addresses common security concerns raised by the community:
 
 ### Security Features Included
 
-| Concern | How ACA Addresses It |
-|---------|---------------------|
-| **1. Close ports / IP allowlist** | ✅ Built-in ingress IP restrictions via `ALLOWED_IP_RANGES` |
-| **2. Auth (strong secret + TLS)** | ✅ Gateway token auth + automatic HTTPS certificates |
-| **3. Rotate keys** | ✅ `az containerapp secret set` + restart |
-| **4. Rate limit + logs + alerts** | ✅ Log Analytics + 4 preconfigured Azure Monitor alerts |
+| Concern | How ACA Addresses It | Configuration |
+|---------|---------------------|---------------|
+| **1. Close ports / IP allowlist** | ✅ Built-in IP restrictions on ingress | `ALLOWED_IP_RANGES` parameter |
+| **2. Auth (JWT/OAuth/strong secret + TLS)** | ✅ Gateway token auth + automatic HTTPS | `MOLTBOT_GATEWAY_TOKEN` + free TLS certs |
+| **3. Rotate keys (assume compromise)** | ✅ Container App secrets + easy rotation | `az containerapp secret set` |
+| **4. Rate limiting + logs + alerts** | ✅ Log Analytics + Azure Monitor alerts | Preconfigured alerts included |
 
 ### Preconfigured Security Alerts
 
@@ -558,7 +707,7 @@ The deployment includes four Azure Monitor alerts (enabled by default):
 | **High Error Rate** | >10 auth errors in 5 min | Brute force attack |
 | **Container Restarts** | >3 restarts in 15 min | Crash or OOM attack |
 | **Unusual Activity** | >100 messages/hour | Abuse |
-| **Channel Disconnect** | Discord goes offline | Token issue |
+| **Channel Disconnect** | Telegram/Discord goes offline | Token issue |
 
 ### Enable IP Restrictions
 
@@ -586,9 +735,17 @@ This makes MoltBot accessible only from within your Azure VNet.
 Rotate API keys without rebuilding:
 
 ```bash
-# Rotate OpenRouter API key
+# Rotate Azure AI Foundry API key
 az containerapp secret set --name MoltBot --resource-group $RESOURCE_GROUP \
-  --secrets "openrouter-api-key=sk-or-v1-new-key"
+  --secrets "openai-api-key=your-new-key-here"
+
+# Rotate Telegram bot token
+az containerapp secret set --name MoltBot --resource-group $RESOURCE_GROUP \
+  --secrets "telegram-bot-token=new-telegram-token"
+
+# Rotate gateway token
+az containerapp secret set --name MoltBot --resource-group $RESOURCE_GROUP \
+  --secrets "gateway-token=new-32-char-secret"
 
 # Restart to apply
 REVISION=$(az containerapp show --name MoltBot --resource-group $RESOURCE_GROUP \
@@ -596,6 +753,77 @@ REVISION=$(az containerapp show --name MoltBot --resource-group $RESOURCE_GROUP 
 az containerapp revision restart --name MoltBot --resource-group $RESOURCE_GROUP \
   --revision $REVISION
 ```
+
+**Rotation best practices:**
+- Rotate API keys monthly or after any suspected exposure
+- Use Azure Key Vault for automated rotation (optional)
+- Monitor for failed auth attempts (covered by alerts above)
+
+### Defense in Depth Architecture
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                           SECURITY LAYERS                                   │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│   ┌─────────────────┐                                                      │
+│   │ 1. IP RESTRICT  │  Only allowed IPs can reach the gateway              │
+│   └────────┬────────┘                                                      │
+│            ▼                                                               │
+│   ┌─────────────────┐                                                      │
+│   │ 2. TLS/HTTPS    │  All traffic encrypted with auto-renewed certs      │
+│   └────────┬────────┘                                                      │
+│            ▼                                                               │
+│   ┌─────────────────┐                                                      │
+│   │ 3. DM ALLOWLIST │  Only your Telegram user ID can message the bot     │
+│   └────────┬────────┘                                                      │
+│            ▼                                                               │
+│   ┌─────────────────┐                                                      │
+│   │ 4. GATEWAY AUTH │  Token required for Control UI access               │
+│   └────────┬────────┘                                                      │
+│            ▼                                                               │
+│   ┌─────────────────┐                                                      │
+│   │ 5. SECRETS MGMT │  API keys stored as Container App secrets           │
+│   └────────┬────────┘                                                      │
+│            ▼                                                               │
+│   ┌─────────────────┐                                                      │
+│   │ 6. MANAGED ID   │  Passwordless auth to Azure services (ACR)          │
+│   └────────┬────────┘                                                      │
+│            ▼                                                               │
+│   ┌─────────────────┐                                                      │
+│   │ 7. HYPER-V      │  Container isolation at hardware level              │
+│   └────────┬────────┘                                                      │
+│            ▼                                                               │
+│   ┌─────────────────┐                                                      │
+│   │ 8. ALERTS       │  Notify on auth failures, restarts, abuse           │
+│   └─────────────────┘                                                      │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Implementation Checklist
+
+| Practice | How to Implement | Why It Matters |
+|----------|------------------|----------------|
+| 🔐 **DM Allowlist** | Set `TELEGRAM_ALLOWED_USER_ID` | Prevents strangers from using your AI |
+| 🎫 **Gateway Token** | Auto-generated, use for Control UI | Protects web management interface |
+| 🌐 **IP Restrictions** | Set `ALLOWED_IP_RANGES` | Limits network attack surface |
+| 🔒 **Secrets in Azure** | Keys stored as secrets, not env vars | Never exposed in logs or source |
+| 👤 **Managed Identity** | Enabled by default | No ACR passwords in config |
+| 📝 **Audit Logs** | Log Analytics workspace | Track all API calls and access |
+| 🚨 **Alerts** | Set `ALERT_EMAIL_ADDRESS` | Immediate notification of issues |
+| 🔄 **Key Rotation** | `az containerapp secret set` | Mitigate compromised credentials |
+
+### What NOT to Do
+
+| ❌ Don't | ✅ Do Instead |
+|---------|---------------|
+| Put API keys in Dockerfile | Use Container App secrets |
+| Use `dm.policy: "open"` | Use `dm.policy: "allowlist"` |
+| Disable gateway token auth | Always require token for Control UI |
+| Skip TELEGRAM_ALLOWED_USER_ID | Always configure the allowlist |
+| Leave IP restrictions empty for production | Set ALLOWED_IP_RANGES |
+| Ignore alerts | Configure email notifications |
 
 ### Security Comparison: ACA vs Other Platforms
 
@@ -610,24 +838,27 @@ az containerapp revision restart --name MoltBot --resource-group $RESOURCE_GROUP
 
 ## Estimated Costs
 
-| Resource | Monthly Cost |
-|----------|--------------|
-| Container Apps (1 CPU, 2GB RAM, always-on) | ~$30-50 |
-| Container Registry (Basic) | ~$5 |
-| Log Analytics (1GB ingestion) | ~$2-5 |
-| **Total** | **~$40-60/month** |
+| Resource | What It Does | Monthly Cost |
+|----------|--------------|:------------:|
+| Container Apps (1 CPU, 2GB RAM, always-on) | Runs MoltBot 24/7 | ~$30-50 |
+| Container Registry (Basic) | Stores the image | ~$5 |
+| Storage Account | Persists data | ~$1-2 |
+| Log Analytics (1GB ingestion) | Stores logs | ~$2-5 |
+| **Total** | | **~$40-60/month** |
 
 **Cost Optimization:**
-- Scale to 0 replicas when not in use (note: breaks Discord connection)
-- Use a smaller/cheaper model via OpenRouter
+- Scale to 0 replicas when not in use (note: breaks Telegram/Discord connection)
+- Use a smaller/cheaper model via Azure AI Foundry
 - Monitor usage in Azure Portal
 
 ## Clean Up
 
 ```bash
 # Delete everything
-az group delete --name $RESOURCE_GROUP --yes --no-wait
+azd down --purge
 ```
+
+This removes all Azure resources. Your data in Azure Storage will be deleted.
 
 ## Key Learnings from This Deployment
 
@@ -637,19 +868,24 @@ During the development of this sample, we discovered several important details:
 
 2. **Config schema matters** - Use `agents.defaults` and `agents.list[].identity`, not the legacy `agent` and `identity` format.
 
-3. **Model IDs must be exact** - `claude-3.5-sonnet` exists, but `claude-sonnet-4-5` does not. Check OpenRouter for current model names.
+3. **MoltBot ignores OPENAI_BASE_URL** — Even with `OPENAI_BASE_URL` set to your Azure endpoint, MoltBot sends requests to `api.openai.com`, resulting in `401 Incorrect API key`. Our entrypoint script detects Azure endpoints (by matching `cognitiveservices` or `openai.azure` in the URL) and overrides the provider config in the generated JSON — injecting the correct `baseUrl` and `api-key` authentication header.
 
-4. **Discord requires shared server** - You can't DM a Discord bot unless you share at least one server with it.
+4. **Model names must match Azure AI Foundry deployments** - Use the **exact** Azure AI Foundry deployment name (case-sensitive).
 
-5. **Secrets need restart** - After updating Container App secrets, you must restart the revision for changes to take effect.
+5. **Telegram requires allowlist** - Bot is online but ignores messages unless your user ID is in `TELEGRAM_ALLOWED_USER_ID`.
+
+6. **Secrets need restart** - After updating Container App secrets, you must restart the revision for changes to take effect.
 
 ## Resources
 
-- [MoltBot Documentation](https://docs.molt.bot)
-- [MoltBot Discord Channel Setup](https://docs.molt.bot/channels/discord)
-- [MoltBot Model Providers](https://docs.molt.bot/concepts/model-providers)
-- [OpenRouter API](https://openrouter.ai)
-- [Azure Container Apps Documentation](https://learn.microsoft.com/azure/container-apps)
+| Resource | Link |
+|----------|------|
+| 📖 MoltBot Docs | [docs.molt.bot](https://docs.molt.bot) |
+| 💻 MoltBot GitHub | [github.com/MoltBot/MoltBot](https://github.com/MoltBot/MoltBot) |
+| 💬 MoltBot Discord | [discord.gg/molt](https://discord.gg/molt) |
+| ☁️ Azure Container Apps | [Documentation](https://learn.microsoft.com/azure/container-apps) |
+| 🧠 Azure AI Foundry | [ai.azure.com](https://ai.azure.com) |
+| 📦 Sample Repository | [GitHub](https://github.com/BandaruDheeraj/moltbot-azure-container-apps) |
 
 ---
 
