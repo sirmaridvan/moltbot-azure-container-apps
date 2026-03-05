@@ -1,11 +1,11 @@
 # 🦞 MoltBot on Azure Container Apps
 
-Deploy your personal AI assistant to Azure Container Apps with Telegram and Discord integration. This sample shows how to run [MoltBot](https://molt.bot) - an open-source personal AI assistant - on Azure's serverless container platform.
+Deploy your personal AI assistant to Azure Container Apps with Telegram integration. This sample shows how to run [MoltBot](https://molt.bot) - an open-source personal AI assistant - on Azure's serverless container platform.
 
 ## What You'll Get
 
 - 🦞 **MoltBot AI Assistant** running on Azure Container Apps
-- 💬 **Multi-channel** - Chat via Telegram (recommended), Discord, and more
+- 💬 **Telegram Integration** - Chat with your AI via Telegram DMs
 - 🧠 **Azure AI Foundry** - Enterprise-grade LLM access with managed model deployments
 - 🔐 **Secure by Default** - Gateway token authentication + DM allowlist + automatic HTTPS
 - 📊 **Azure Monitoring** - Full observability via Log Analytics
@@ -24,9 +24,9 @@ Deploy your personal AI assistant to Azure Container Apps with Telegram and Disc
 │  │  │                    🦞 MoltBot Container App                       │  ││
 │  │  │                                                                    │  ││
 │  │  │  • Gateway (port 18789)          • Telegram Bot Connection        │  ││
-│  │  │  • Control UI (web chat)         • Discord Bot Connection         │  ││
-│  │  │  • Dynamic Config Generation     • Azure AI Foundry Integration   │  ││
-│  │  │  • DM Allowlist Security         • Skills & Automation            │  ││
+│  │  │  • Control UI (web chat)         • Azure AI Foundry Integration   │  ││
+│  │  │  • Dynamic Config Generation     • DM Allowlist Security          │  ││
+│  │  │  • Skills & Automation           • Persistent Memory              │  ││
 │  │  └───────────────────────────────────────────────────────────────────┘  ││
 │  └─────────────────────────────────────────────────────────────────────────┘│
 │                                                                             │
@@ -45,7 +45,7 @@ Deploy your personal AI assistant to Azure Container Apps with Telegram and Disc
 - ✅ [Azure Developer CLI (azd)](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd) installed
 - ✅ [Azure CLI](https://docs.microsoft.com/cli/azure/install-azure-cli) installed
 - ✅ [Azure AI Foundry](https://ai.azure.com) model deployment + API key
-- ✅ Telegram account (recommended) or Discord account for bot creation
+- ✅ Telegram account for bot creation
 
 ## One-Click Deployment with azd
 
@@ -191,9 +191,8 @@ This deploys MoltBot to Container Apps with all your secrets configured.
 ### Updating After Deployment
 
 ```bash
-# Change configuration (e.g., add a Discord channel)
-azd env set DISCORD_BOT_TOKEN "your-discord-token"
-azd env set DISCORD_ALLOWED_USERS "your-discord-user-id"
+# Change configuration (e.g., add another Telegram user)
+azd env set TELEGRAM_ALLOWED_USER_ID "user-id-1,user-id-2"
 azd deploy
 
 # Rebuild image with latest MoltBot
@@ -203,41 +202,16 @@ azd deploy
 
 ---
 
-## Adding More Channels
+## Adding More Telegram Users
 
-### Telegram (Recommended)
+To allow additional Telegram users to chat with your bot:
 
 ```bash
-azd env set TELEGRAM_BOT_TOKEN "your-telegram-token"
 azd env set TELEGRAM_ALLOWED_USER_ID "user-id-1,user-id-2"  # Comma-separated for multiple users
 azd deploy
 ```
 
-### Discord (Optional)
-
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click **New Application** → Name it (e.g., "MoltBot-Azure")
-3. Go to **Bot** → Click **Add Bot** (or **Reset Token** if exists)
-4. Enable these **Privileged Gateway Intents**:
-   - ✅ Message Content Intent
-   - ✅ Server Members Intent
-5. Click **Reset Token** → **Copy the bot token** (save it!)
-6. Go to **OAuth2 → URL Generator**:
-   - Scopes: `bot`, `applications.commands`
-   - Bot Permissions: `Send Messages`, `Read Message History`, `View Channels`
-7. Copy the generated URL and invite the bot to your server
-
-```bash
-azd env set DISCORD_BOT_TOKEN "your-discord-token"
-azd env set DISCORD_ALLOWED_USERS "your-discord-user-id"
-azd deploy
-```
-
-> **Note:** Discord requires you to share a server with the bot before you can DM it.
-
-### WhatsApp
-
-Requires the desktop wizard to scan a QR code — not supported in headless container deployments.
+Get each user's Telegram ID via @userinfobot or @getmyid_bot.
 
 ---
 
@@ -366,22 +340,12 @@ az containerapp show --name $APP_NAME --resource-group $RESOURCE_GROUP --query "
 
 ## Testing Your Bot
 
-### Via Telegram (Recommended)
+### Via Telegram
 
 1. Open Telegram and search for your bot by username
 2. Tap **Start** to begin a chat
 3. Send: `Hello!`
 4. Wait a few seconds for the response
-
-### Via Discord (Optional)
-
-**Important:** Discord requires you to share a server with the bot before you can DM it.
-
-1. **Create or use an existing Discord server** where you can add the bot
-2. **Invite the bot** using the OAuth2 URL you generated
-3. **Find the bot** in the server's member list (right sidebar)
-4. **Right-click the bot → Message** to open a DM
-5. Send: `Hello!`
 
 ### Via Control UI (Web Chat)
 
@@ -405,8 +369,6 @@ https://<your-app-url>/?token=<your-gateway-token>
 | `MOLTBOT_GATEWAY_TOKEN` | ✅ | Random token for gateway authentication (auto-generated if not set) |
 | `MOLTBOT_MODEL` | No | Azure AI Foundry deployment name (default: `gpt-5-mini`) |
 | `MOLTBOT_PERSONA_NAME` | No | Bot name (default: `Clawd`) |
-| `DISCORD_BOT_TOKEN` | No | Discord bot token (optional channel) |
-| `DISCORD_ALLOWED_USERS` | No | Discord user ID for DM allowlist |
 
 ### Security Parameters (azd)
 
@@ -558,7 +520,6 @@ Gateway token configured: yes
 - `Unknown model: ...` - Model name must match your Azure AI Foundry deployment name exactly
 - `HTTP 401: authentication_error` - Invalid API key or requests hitting wrong endpoint
 - `[telegram] channel exited` - Invalid Telegram bot token
-- `[discord] channel exited` - Invalid Discord bot token
 
 ## Troubleshooting
 
@@ -678,13 +639,6 @@ azd deploy
    az role assignment list --assignee $IDENTITY_PRINCIPAL_ID --scope $ACR_ID
    ```
 
-### Can't DM the Discord Bot
-
-Discord requires bots and users to share at least one server:
-1. Create a private Discord server (just for you and the bot)
-2. Invite the bot using the OAuth2 URL
-3. Now you can DM the bot
-
 ## Security
 
 This deployment addresses common security concerns raised by the community:
@@ -707,7 +661,7 @@ The deployment includes four Azure Monitor alerts (enabled by default):
 | **High Error Rate** | >10 auth errors in 5 min | Brute force attack |
 | **Container Restarts** | >3 restarts in 15 min | Crash or OOM attack |
 | **Unusual Activity** | >100 messages/hour | Abuse |
-| **Channel Disconnect** | Telegram/Discord goes offline | Token issue |
+| **Channel Disconnect** | Telegram goes offline | Token issue |
 
 ### Enable IP Restrictions
 
@@ -847,7 +801,7 @@ az containerapp revision restart --name MoltBot --resource-group $RESOURCE_GROUP
 | **Total** | | **~$40-60/month** |
 
 **Cost Optimization:**
-- Scale to 0 replicas when not in use (note: breaks Telegram/Discord connection)
+- Scale to 0 replicas when not in use (note: breaks Telegram connection)
 - Use a smaller/cheaper model via Azure AI Foundry
 - Monitor usage in Azure Portal
 
@@ -882,7 +836,7 @@ During the development of this sample, we discovered several important details:
 |----------|------|
 | 📖 MoltBot Docs | [docs.molt.bot](https://docs.molt.bot) |
 | 💻 MoltBot GitHub | [github.com/MoltBot/MoltBot](https://github.com/MoltBot/MoltBot) |
-| 💬 MoltBot Discord | [discord.gg/molt](https://discord.gg/molt) |
+| 💬 MoltBot Community | [discord.gg/molt](https://discord.gg/molt) |
 | ☁️ Azure Container Apps | [Documentation](https://learn.microsoft.com/azure/container-apps) |
 | 🧠 Azure AI Foundry | [ai.azure.com](https://ai.azure.com) |
 | 📦 Sample Repository | [GitHub](https://github.com/BandaruDheeraj/moltbot-azure-container-apps) |
